@@ -1,19 +1,61 @@
-az group create --name acdnd-c4-project --location westus --verbose
+az login
 
-az storage account create --name trucnvstorage --resource-group acdnd-c4-project --location westus --sku Standard_LRS
+az group create --name trucnv-resource-group --location westus --verbose
 
-az network nsg create --resource-group acdnd-c4-project --name udacity-vmss-nsg --verbose
+az network nsg create --resource-group trucnv-resource-group --name udacity-vmss-nsg --verbose
 
-az vmss create --resource-group acdnd-c4-project --name udacity-vmss --image Ubuntu2204 --vm-sku Standard_B1s --nsg udacity-vmss-nsg --subnet udacity-vmss-vnet-subnet --vnet-name udacity-vmss-vnet --backend-pool-name udacity-vmss-bepool --storage-sku Standard_LRS --load-balancer udacity-vmss-lb --custom-data cloud-init.txt --upgrade-policy-mode automatic --admin-username udacityadmin --generate-ssh-keys --verbose
+az vmss create --resource-group trucnv-resource-group --name udacity-vmss --image Ubuntu2204 --vm-sku Standard_B1s --nsg udacity-vmss-nsg --subnet udacity-vmss-vnet-subnet --vnet-name udacity-vmss-vnet --backend-pool-name udacity-vmss-bepool --storage-sku Standard_LRS --load-balancer udacity-vmss-lb --custom-data cloud-init.txt --upgrade-policy-mode automatic --admin-username udacityadmin --generate-ssh-keys --verbose
 
-az network vnet subnet update --resource-group acdnd-c4-project --name udacity-vmss-vnet-subnet --vnet-name udacity-vmss-vnet --network-security-group udacity-vmss-nsg --verbose
+az network vnet subnet update --resource-group trucnv-resource-group --name udacity-vmss-vnet-subnet --vnet-name udacity-vmss-vnet --network-security-group udacity-vmss-nsg --verbose
 
-az network lb probe create --resource-group acdnd-c4-project --lb-name udacity-vmss-lb --name tcpProbe --protocol tcp --port 80 --interval 5 --threshold 2 --verbose
+az network lb probe create --resource-group trucnv-resource-group --lb-name udacity-vmss-lb --name tcpProbe --protocol tcp --port 80 --interval 5 --threshold 2 --verbose
 
-az network lb rule create --resource-group acdnd-c4-project --name udacity-vmss-lb-network-rule --lb-name udacity-vmss-lb --probe-name tcpProbe --backend-pool-name udacity-vmss-bepool --backend-port 80 --frontend-ip-name loadBalancerFrontEnd --frontend-port 80 --protocol tcp --verbose
+az network lb rule create --resource-group trucnv-resource-group --name udacity-vmss-lb-network-rule --lb-name udacity-vmss-lb --probe-name tcpProbe --backend-pool-name udacity-vmss-bepool --backend-port 80 --frontend-ip-name loadBalancerFrontEnd --frontend-port 80 --protocol tcp --verbose
 
-az network nsg rule create --resource-group acdnd-c4-project --nsg-name udacity-vmss-nsg --name Port_80 --destination-port-ranges 80 --direction Inbound --priority 100 --verbose
+az network nsg rule create --resource-group trucnv-resource-group --nsg-name udacity-vmss-nsg --name Port_80 --destination-port-ranges 80 --direction Inbound --priority 100 --verbose
 
-az network nsg rule create --resource-group acdnd-c4-project --nsg-name udacity-vmss-nsg --name Port_22 --destination-port-ranges 22 --direction Inbound --priority 110 --verbose
+az network nsg rule create --resource-group trucnv-resource-group --nsg-name udacity-vmss-nsg --name Port_22 --destination-port-ranges 22 --direction Inbound --priority 110 --verbose
 
-az monitor app-insights component create --resource-group acdnd-c4-project --app trucnvAppInsights --location westus
+az monitor app-insights component create --resource-group trucnv-resource-group --app trucnvAppInsights --location westus
+
+
+
+# Find the port for connecting via SSH
+az vmss list-instance-connection-info --resource-group trucnv-resource-group --name udacity-vmss 
+# Connect you to your VM
+ssh -p 50001 udacityadmin@40.112.164.76
+# Clone and navigate inside the project repo. 
+git clone https://github.com/trucvip123/nd081-c4-azure-performance-project-starter.git
+cd nd081-c4-azure-performance-project-starter/
+# Make sure, you aer in the master branch
+git checkout Deploy_to_VMSS
+# Update sudo
+sudo apt update
+sudo apt-get install python3-pip
+# Install pip
+sudo -H pip3 install --upgrade pip
+# Install and start Redis server. Refer https://redis.io/download for help.
+wget https://download.redis.io/releases/redis-6.2.4.tar.gz
+tar xzf redis-6.2.4.tar.gz
+cd redis-6.2.4
+make
+# Ping your Redis server to verify if it is running. It will return "PONG"
+redis-cli ping
+# The server will start after make. Otherwise, use
+src/redis-server     
+# Install dependencies - necessary Python packages - redis, opencensus, opencensus-ext-azure, opencensus-ext-flask, flask
+cd ..      
+pip install -r requirements.txt
+# Run the app from the Flask application directory
+cd azure-vote/      
+python3 main.py
+
+
+
+# Log traces
+traces
+| where timestamp > ago(24h)
+| where message == "new_Cats_vote" or message == "new_Dogs_vote"
+| sort by timestamp desc
+| summarize count() by message
+| limit 50 

@@ -1,59 +1,48 @@
 from flask import Flask, request, render_template
 import os
-import random
 import redis
 import socket
-import sys
 import logging
-from datetime import datetime
 
 # App Insights
 # TODO: Import required libraries for App Insights
-# App Insights
 from opencensus.ext.azure.log_exporter import AzureLogHandler
-from opencensus.ext.azure import metrics_exporter
 from opencensus.ext.azure.trace_exporter import AzureExporter
-from opencensus.ext.flask.flask_middleware import FlaskMiddleware
-from opencensus.stats import aggregation as aggregation_module
-from opencensus.stats import measure as measure_module
-from opencensus.stats import stats as stats_module
-from opencensus.stats import view as view_module
-from opencensus.tags import tag_map as tag_map_module
 from opencensus.trace.samplers import ProbabilitySampler
 from opencensus.trace.tracer import Tracer
+from opencensus.ext.flask.flask_middleware import FlaskMiddleware
 
-conn_str = "InstrumentationKey=a32093be-fea1-40ba-a4dc-9ccf6efabc37"
 
+# MOVE TO SECRETS FOR PRODUCTION!
+instrumentation_key = "b365af3f-a1ae-41ce-88e1-1596ccbb4bf9"
 # Logging
+# TODO: Setup logger
 logger = logging.getLogger(__name__)
-handler = AzureLogHandler(
-    connection_string=conn_str
-)
-logger.addHandler(handler)
 logger.setLevel(logging.INFO)
+logger.addHandler(
+    AzureLogHandler(connection_string=f"InstrumentationKey={instrumentation_key}")
+)
 
 # Metrics
-exporter = metrics_exporter.new_metrics_exporter(
-    enable_standard_metrics=True,
-    connection_string=conn_str,
-)
+# TODO: Setup exporter
+# NEED TO CONFIGURE APPLICATIONINSIGHTS_CONNECTION_STRING
+exporter = AzureExporter(connection_string=f"InstrumentationKey={instrumentation_key}")
 
 
 # Tracing
 tracer = Tracer(
-    exporter=AzureExporter(
-        connection_string=conn_str
-    ),
+    exporter=exporter,
     sampler=ProbabilitySampler(1.0),
 )
 
 app = Flask(__name__)
 
 # Requests
+# TODO: Setup flask middleware
 middleware = FlaskMiddleware(
     app,
     exporter=AzureExporter(
-        connection_string=conn_str
+        connection_string=f"InstrumentationKey={instrumentation_key}"
     ),
     sampler=ProbabilitySampler(rate=1.0),
 )
@@ -95,11 +84,14 @@ def index():
     if request.method == "GET":
         # Get current values
         vote1 = r.get(button1).decode("utf-8")
-        tracer.span(name="Cats_vote")
+        # TODO: use tracer object to trace cat vote
+        with tracer.span(name="cat_vote") as span:
+            print("Cats Vote =", vote1)
 
         vote2 = r.get(button2).decode("utf-8")
-        tracer.span(name="Dogs_vote")
-
+        # TODO: use tracer object to trace dog vote
+        with tracer.span(name="dog_vote") as span:
+            print("Dogs Vote =", vote2)
         # Return index with values
         return render_template(
             "index.html",
@@ -117,11 +109,13 @@ def index():
             r.set(button2, 0)
             vote1 = r.get(button1).decode("utf-8")
             properties = {"custom_dimensions": {"Cats Vote": vote1}}
-            logger.info("cat vote", extra=properties)
+            # TODO: use logger object to log cat vote
+            logger.info("Cats Vote", extra=properties)
 
             vote2 = r.get(button2).decode("utf-8")
             properties = {"custom_dimensions": {"Dogs Vote": vote2}}
-            logger.info("dog vote", extra=properties)
+            # TODO: use logger object to log dog vote
+            logger.info("Dogs Vote", extra=properties)
 
             return render_template(
                 "index.html",
@@ -154,6 +148,6 @@ def index():
 
 if __name__ == "__main__":
     # TODO: Use the statement below when running locally
-    app.run()
+    # app.run()
     # TODO: Use the statement below before deployment to VMSS
-    # app.run(host='0.0.0.0', threaded=True, debug=True) # remote
+    app.run(host="0.0.0.0", threaded=True, debug=True)  # remote
