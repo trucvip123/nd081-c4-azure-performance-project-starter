@@ -23,7 +23,7 @@ az monitor app-insights component create --resource-group trucnv-resource-group 
 # Find the port for connecting via SSH
 az vmss list-instance-connection-info --resource-group trucnv-resource-group --name udacity-vmss 
 # Connect you to your VM
-ssh -p 50001 udacityadmin@40.112.164.76
+ssh -p 50002 udacityadmin@13.88.189.102
 # Clone and navigate inside the project repo. 
 git clone https://github.com/trucvip123/nd081-c4-azure-performance-project-starter.git
 cd nd081-c4-azure-performance-project-starter/

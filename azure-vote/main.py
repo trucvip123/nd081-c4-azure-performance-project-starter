@@ -11,27 +11,48 @@ from opencensus.ext.azure.trace_exporter import AzureExporter
 from opencensus.trace.samplers import ProbabilitySampler
 from opencensus.trace.tracer import Tracer
 from opencensus.ext.flask.flask_middleware import FlaskMiddleware
+from opencensus.trace import config_integration
+from opencensus.ext.azure.log_exporter import AzureEventHandler
+from opencensus.ext.azure import metrics_exporter
+from opencensus.stats import stats as stats_module
+
 
 
 # MOVE TO SECRETS FOR PRODUCTION!
 instrumentation_key = "b365af3f-a1ae-41ce-88e1-1596ccbb4bf9"
+
+
+# For metrics
+stats = stats_module.stats
+view_manager = stats.view_manager
+
+
+config_integration.trace_integrations(['logging'])
+config_integration.trace_integrations(['requests'])
+
 # Logging
 # TODO: Setup logger
 logger = logging.getLogger(__name__)
+handler = AzureLogHandler(connection_string=f"InstrumentationKey={instrumentation_key}")
+handler.setFormatter(logging.Formatter('%(traceId)s %(spanId)s %(message)s'))
+logger.addHandler(handler)
+# Logging custom Events 
+logger.addHandler(AzureEventHandler(connection_string=f"InstrumentationKey={instrumentation_key}"))
+# Set the logging level
 logger.setLevel(logging.INFO)
-logger.addHandler(
-    AzureLogHandler(connection_string=f"InstrumentationKey={instrumentation_key}")
-)
 
 # Metrics
 # TODO: Setup exporter
 # NEED TO CONFIGURE APPLICATIONINSIGHTS_CONNECTION_STRING
-exporter = AzureExporter(connection_string=f"InstrumentationKey={instrumentation_key}")
-
+exporter = metrics_exporter.new_metrics_exporter(
+  enable_standard_metrics=True,
+  connection_string=f"InstrumentationKey={instrumentation_key}")
+view_manager.register_exporter(exporter)
 
 # Tracing
 tracer = Tracer(
-    exporter=exporter,
+    exporter=AzureExporter(
+        connection_string=f"InstrumentationKey={instrumentation_key}"),
     sampler=ProbabilitySampler(1.0),
 )
 
@@ -85,13 +106,14 @@ def index():
         # Get current values
         vote1 = r.get(button1).decode("utf-8")
         # TODO: use tracer object to trace cat vote
-        with tracer.span(name="cat_vote") as span:
-            print("Cats Vote =", vote1)
+        with tracer.span(name="Cats Vote") as span:
+            print("Cats Vote")
 
         vote2 = r.get(button2).decode("utf-8")
         # TODO: use tracer object to trace dog vote
-        with tracer.span(name="dog_vote") as span:
-            print("Dogs Vote =", vote2)
+        with tracer.span(name="Dogs Vote") as span:
+            print("Dogs Vote")
+
         # Return index with values
         return render_template(
             "index.html",
@@ -132,8 +154,15 @@ def index():
             r.incr(vote, 1)
 
             # Get current values
-            vote1 = r.get(button1).decode("utf-8")
-            vote2 = r.get(button2).decode("utf-8")
+            vote1 = r.get(button1).decode('utf-8')
+            properties = {'custom_dimensions': {'Cats Vote': vote1}}
+            # TODO: use logger object to log cat vote
+            logger.info('Cats Vote', extra=properties)
+
+            vote2 = r.get(button2).decode('utf-8')
+            properties = {'custom_dimensions': {'Dogs Vote': vote2}}
+            # TODO: use logger object to log dog vote
+            logger.info('Dogs Vote', extra=properties) 
 
             # Return results
             return render_template(
