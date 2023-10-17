@@ -17,9 +17,12 @@ from opencensus.ext.azure import metrics_exporter
 from opencensus.stats import stats as stats_module
 
 
-
 # MOVE TO SECRETS FOR PRODUCTION!
+<<<<<<< HEAD
 instrumentation_key = "acb6a5f1-1598-40c0-aec9-7b755e4804cd"
+=======
+instrumentation_key = "089e400c-c631-4355-8dfe-4bb56eb7e187"
+>>>>>>> 2882b3b ([update] config for aks)
 
 
 # For metrics
@@ -27,8 +30,8 @@ stats = stats_module.stats
 view_manager = stats.view_manager
 
 
-config_integration.trace_integrations(['logging'])
-config_integration.trace_integrations(['requests'])
+config_integration.trace_integrations(["logging"])
+config_integration.trace_integrations(["requests"])
 
 # Logging
 # TODO: Setup logger
@@ -36,8 +39,10 @@ logger = logging.getLogger(__name__)
 handler = AzureLogHandler(connection_string=f"InstrumentationKey={instrumentation_key}")
 handler.setFormatter(logging.Formatter('%(message)s'))
 logger.addHandler(handler)
-# Logging custom Events 
-logger.addHandler(AzureEventHandler(connection_string=f"InstrumentationKey={instrumentation_key}"))
+# Logging custom Events
+logger.addHandler(
+    AzureEventHandler(connection_string=f"InstrumentationKey={instrumentation_key}")
+)
 # Set the logging level
 logger.setLevel(logging.INFO)
 
@@ -45,14 +50,16 @@ logger.setLevel(logging.INFO)
 # TODO: Setup exporter
 # NEED TO CONFIGURE APPLICATIONINSIGHTS_CONNECTION_STRING
 exporter = metrics_exporter.new_metrics_exporter(
-  enable_standard_metrics=True,
-  connection_string=f"InstrumentationKey={instrumentation_key}")
+    enable_standard_metrics=True,
+    connection_string=f"InstrumentationKey={instrumentation_key}",
+)
 view_manager.register_exporter(exporter)
 
 # Tracing
 tracer = Tracer(
     exporter=AzureExporter(
-        connection_string=f"InstrumentationKey={instrumentation_key}"),
+        connection_string=f"InstrumentationKey={instrumentation_key}"
+    ),
     sampler=ProbabilitySampler(1.0),
 )
 
@@ -87,7 +94,21 @@ else:
     title = app.config["TITLE"]
 
 # Redis Connection
-r = redis.Redis()
+# r = redis.Redis()
+# Redis configurations
+redis_server = os.environ['REDIS']
+
+# Redis Connection to another container
+try:
+   if "REDIS_PWD" in os.environ:
+      r = redis.StrictRedis(host=redis_server,
+                        port=6379,
+                        password=os.environ['REDIS_PWD'])
+   else:
+      r = redis.Redis(redis_server)
+   r.ping()
+except redis.ConnectionError:
+   exit('Failed to connect to Redis, terminating.')
 
 # Change title to host name to demo NLB
 if app.config["SHOWHOST"] == "true":
@@ -160,15 +181,15 @@ def index():
             logger.info('new_{}_vote'.format(vote), extra=properties)
             
             # Get current values
-            vote1 = r.get(button1).decode('utf-8')
-            properties = {'custom_dimensions': {'Cats Vote': vote1}}
+            vote1 = r.get(button1).decode("utf-8")
+            properties = {"custom_dimensions": {"Cats Vote": vote1}}
             # TODO: use logger object to log cat vote
-            logger.info('Cats Vote', extra=properties)
+            logger.info("Cats Vote", extra=properties)
 
-            vote2 = r.get(button2).decode('utf-8')
-            properties = {'custom_dimensions': {'Dogs Vote': vote2}}
+            vote2 = r.get(button2).decode("utf-8")
+            properties = {"custom_dimensions": {"Dogs Vote": vote2}}
             # TODO: use logger object to log dog vote
-            logger.info('Dogs Vote', extra=properties) 
+            logger.info("Dogs Vote", extra=properties)
 
             # Return results
             return render_template(
