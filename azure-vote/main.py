@@ -19,7 +19,7 @@ from opencensus.stats import stats as stats_module
 
 
 # MOVE TO SECRETS FOR PRODUCTION!
-instrumentation_key = "b365af3f-a1ae-41ce-88e1-1596ccbb4bf9"
+instrumentation_key = "acb6a5f1-1598-40c0-aec9-7b755e4804cd"
 
 
 # For metrics
@@ -34,7 +34,7 @@ config_integration.trace_integrations(['requests'])
 # TODO: Setup logger
 logger = logging.getLogger(__name__)
 handler = AzureLogHandler(connection_string=f"InstrumentationKey={instrumentation_key}")
-handler.setFormatter(logging.Formatter('%(traceId)s %(spanId)s %(message)s'))
+handler.setFormatter(logging.Formatter('%(message)s'))
 logger.addHandler(handler)
 # Logging custom Events 
 logger.addHandler(AzureEventHandler(connection_string=f"InstrumentationKey={instrumentation_key}"))
@@ -153,6 +153,12 @@ def index():
             vote = request.form["vote"]
             r.incr(vote, 1)
 
+            vote0 = r.get(vote).decode('utf-8')
+            
+            # log current vote
+            properties = {'custom_dimensions': {'{}_vote'.format(vote): vote0}}
+            logger.info('new_{}_vote'.format(vote), extra=properties)
+            
             # Get current values
             vote1 = r.get(button1).decode('utf-8')
             properties = {'custom_dimensions': {'Cats Vote': vote1}}
