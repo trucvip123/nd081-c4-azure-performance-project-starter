@@ -22,40 +22,116 @@ az monitor app-insights component create --resource-group trucnv-resource-group 
 
 # Find the port for connecting via SSH
 az vmss list-instance-connection-info --resource-group trucnv-resource-group --name udacity-vmss 
+
 # Connect you to your VM
-ssh -p 50002 udacityadmin@13.88.189.102
+ssh -p 50001 udacityadmin@13.91.162.205
+
 # Clone and navigate inside the project repo. 
 git clone https://github.com/trucvip123/nd081-c4-azure-performance-project-starter.git
+
 cd nd081-c4-azure-performance-project-starter/
+
 # Make sure, you aer in the master branch
 git checkout Deploy_to_VMSS
+
 # Update sudo
 sudo apt update
+
+# Optional
 sudo apt-get install python3-pip
+
 # Install pip
 sudo -H pip3 install --upgrade pip
+
 # Install and start Redis server. Refer https://redis.io/download for help.
 wget https://download.redis.io/releases/redis-6.2.4.tar.gz
 tar xzf redis-6.2.4.tar.gz
 cd redis-6.2.4
 make
+
 # Ping your Redis server to verify if it is running. It will return "PONG"
 redis-cli ping
 # The server will start after make. Otherwise, use
 src/redis-server     
 # Install dependencies - necessary Python packages - redis, opencensus, opencensus-ext-azure, opencensus-ext-flask, flask
-cd ..      
+cd ..
 pip install -r requirements.txt
 # Run the app from the Flask application directory
-cd azure-vote/      
+cd azure-vote/
 python3 main.py
 
 
 
-# Log traces
-traces
-| where timestamp > ago(24h)
-| where message == "new_Cats_vote" or message == "new_Dogs_vote"
-| sort by timestamp desc
-| summarize count() by message
-| limit 50 
+## Build docker local
+
+# Create images, and run the application locally using Docker.
+docker-compose up -d --build
+
+# You will see two new images - "azure-vote-front:v1" and "mcr.microsoft.com/oss/bitnami/redis:6.0.8" (built from "redis:6.0.8")
+docker images
+
+# Correspondingly, you will see two running containers - "azure-vote-front" and "azure-vote-back" 
+docker ps
+
+# Check if the frontend application is up and running 
+docker exec -it azure-vote-front bash
+ls
+
+# Check if the Redis server is running
+docker exec -it azure-vote-back bash
+redis-cli ping
+
+
+## Deploy to AKS
+# Creating AKS cluster
+az aks create --resource-group trucnv-resource-group --name udacity-cluster --node-count 1 --enable-addons monitoring --generate-ssh-keys
+OR
+az aks create --resource-group trucnv-resource-group --name udacity-cluster --node-count 1 --generate-ssh-keys
+
+# Connect to AKS cluster
+az aks get-credentials --resource-group trucnv-resource-group --name udacity-cluster --verbose
+
+kubectl get nodes
+
+# Create a Container Registry in Azure to store the image
+az acr create --resource-group trucnv-resource-group --name myacr202310 --sku Basic
+
+# Log in to the ACR
+az acr login --name myacr202310
+
+# Get the ACR login server name
+az acr show --name myacr202310 --query loginServer --output table
+
+# Associate a tag to the local image. You can use a different tag (say v2, v3, v4, ....) everytime you edit the underlying image. 
+docker tag azure-vote-front:v1 myacr202310.azurecr.io/azure-vote-front:v1
+
+# Push the local registry to remote ACR
+docker push myacr202310.azurecr.io/azure-vote-front:v1
+
+# Verify if your image is up in the cloud.
+az acr repository list --name myacr202310 --output table
+
+# Associate the AKS cluster with the ACR
+az aks update -n udacity-cluster -g trucnv-resource-group --attach-acr myacr202310
+
+# Get the ACR login server name
+az acr show --name myacr202310 --query loginServer --output table
+
+# Deploy the application. Run the command below from the parent directory where the *azure-vote-all-in-one-redis.yaml* file is present. 
+kubectl apply -f azure-vote-all-in-one-redis.yaml
+
+kubectl set image deployment azure-vote-front azure-vote-front=myacr202310.azurecr.io/azure-vote-front:v1
+
+# Test the application at the External IP
+# It will take a few minutes to come alive. 
+kubectl get service
+
+# Check the status of each node
+kubectl get pods
+
+# Create an autoscaler
+kubectl autoscale deployment azure-vote-front --cpu-percent=5 --min=1 --max=10
+
+# Observe the state of the cluster
+kubectl get hpa
+kubectl describe hpa azure-vote-front
